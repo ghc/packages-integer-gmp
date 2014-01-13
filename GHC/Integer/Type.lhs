@@ -174,17 +174,21 @@ smartJ# (-1#) mb# | isTrue# (v <# 0#) = S# v
       v = negateInt# (indexIntArray# mb# 0#)
 smartJ# s# mb# = J# s# mb#
 
--- |Construct 'Integer' out of 3-tuple returned by GMP wrapper primops
+-- |Construct 'Integer' out of a 'MPZ#' as returned by GMP wrapper primops
 --
--- See definition of 'MPZ#' in "GHC.Integer.GMP.Prim" for more details.
+-- IMPORTANT: The 'ByteArray#' element MUST NOT be accessed unless the
+-- size-element indicates more than one limb!
+--
+-- See notes at definition site of 'MPZ#' in "GHC.Integer.GMP.Prim"
+-- for more details.
 mpzToInteger :: MPZ# -> Integer
 mpzToInteger (# 0#, _, _ #) = S# 0#
 mpzToInteger (# 1#, _, w# #) | isTrue# (v# >=# 0#) = S# v#
-                              | True = case word2Integer# w# of (# _, d #) -> J# 1# d
+                             | True = case word2Integer# w# of (# _, d #) -> J# 1# d
     where
       v# = word2Int# w#
 mpzToInteger (# -1#, _, w# #) | isTrue# (v# <=# 0#) = S# v#
-                               | True = case word2Integer# w# of (# _, d #) -> J# -1# d
+                              | True = case word2Integer# w# of (# _, d #) -> J# -1# d
     where
       v# = negateInt# (word2Int# w#)
 mpzToInteger (# s#, mb#, _ #) = J# s# mb#
@@ -193,8 +197,8 @@ mpzToInteger (# s#, mb#, _ #) = J# s# mb#
 mpzToInteger2 :: (# MPZ#, MPZ# #) -> (# Integer, Integer #)
 mpzToInteger2 (# mpz1, mpz2 #) = (# i1, i2 #)
     where
-      !i1 = mpzToInteger mpz1
-      !i2 = mpzToInteger mpz2
+      !i1 = mpzToInteger mpz1 -- This use of `!` avoids creating thunks,
+      !i2 = mpzToInteger mpz2 -- see also Note [Use S# if possible].
 
 -- |Negate MPZ#
 mpzNeg :: MPZ# -> MPZ#

@@ -81,22 +81,39 @@ import GHC.Types
 -- Double isn't available yet, and we shouldn't be using defaults anyway:
 default ()
 
--- | This is represents a @mpz_t@.
+-- | This is represents a @mpz_t@ value in a heap-saving way.
 --
 -- The first tuple element, @/s/@, encodes the sign of the integer
 -- @/i/@ (i.e. @signum /s/ == signum /i/@), and the number of /limbs/
 -- used to represent the magnitude. If @abs /s/ > 1@, the 'ByteArray#'
 -- contains @abs /s/@ limbs encoding the integer. Otherwise, if @abs
 -- /s/ < 2@, the single limb is stored in the 'Word#' element instead
--- (and the 'ByteArray#' element is undefined)
+-- (and the 'ByteArray#' element is undefined and MUST NOT be accessed
+-- as it doesn't point to a proper 'ByteArray#' but rather to an
+-- unsafe-coerced 'Int' in order be polite to the GC -- see
+-- @DUMMY_BYTE_ARR@ in gmp-wrappers.cmm)
 --
--- This representation allows to reduce temporary heap allocations of
--- 1-limb 'ByteArray#'s which fit into the 'S#'-constructor. See also
--- Trac #8647 for more information.
+-- More specifically, the following encoding is used (where `⊥` means
+-- undefined/unused):
 --
--- See also 'GHC.Integer.Type.mpzToInteger' function and the
--- @MP_INT_1LIMB_RETURN()@ macro in @gmp-wrappers.cmm@ for
--- implementation details.
+-- * (#  0#, ⊥, 0## #) -> value = 0
+-- * (#  1#, ⊥, w   #) -> value = w
+-- * (# -1#, ⊥, w   #) -> value = -w
+-- * (#  s#, d, 0## #) -> value = J# s d
+--
+-- This representation allows to avoid temporary heap allocations
+-- (-> Trac #8647) of 1-limb 'ByteArray#'s which fit into the
+-- 'S#'-constructor. Moreover, this allows to delays 1-limb
+-- 'ByteArray#' heap allocations, as such 1-limb `mpz_t`s can be
+-- optimistically allocated on the Cmm stack and returned as a @#word@
+-- in case the `mpz_t` wasn't grown beyond 1 limb by the GMP
+-- operation.
+--
+-- See also the 'GHC.Integer.Type.mpzToInteger' function which ought
+-- to be used for converting 'MPZ#'s to 'Integer's and the
+-- @MP_INT_1LIMB_RETURN()@ macro in @gmp-wrappers.cmm@ which
+-- constructs 'MPZ#' values in the first place for implementation
+-- details.
 type MPZ# = (# Int#, ByteArray#, Word# #)
 
 -- | Returns -1,0,1 according as first argument is less than, equal to, or greater than second argument.
